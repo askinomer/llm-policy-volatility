@@ -23,6 +23,8 @@ data/raw/*
 data/processed/*
 !data/raw/.gitkeep
 !data/processed/.gitkeep
+# Altın set ise git'te takip edilsin (manuel etiketlenen değerli veri)
+!data/gold_set.csv
 
 # Çıktı dosyaları (git'te tutmuyoruz, pipeline üretir)
 outputs/figures/*.html
