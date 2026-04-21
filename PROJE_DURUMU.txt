@@ -1,204 +1,290 @@
 ================================================================================
   BİTİRME PROJESİ — DURUM RAPORU
   "LLM Tabanlı Politika Olay Çıkarımı ve Finansal Volatilite Modellemesi"
-  Tarih: 15 Nisan 2026
+  Son güncelleme: 21 Nisan 2026
 ================================================================================
 
-TOPLAM KOD: ~4.800 satır Python (15 modül + 4 test + 1 config + 1 main + 1 demo)
+TOPLAM KOD: ~5.000 satır Python (15 modül + 4 test + 1 config + 1 main)
+GITHUB    : https://github.com/askinomer/llm-policy-volatility
 
 ================================================================================
-1. KLASÖR YAPISI
+0. SON OTURUMDA NE YAPILDI (21 NİSAN 2026)
+================================================================================
+
+[+] Proje GitHub'a pushlandı (askinomer/llm-policy-volatility).
+[+] .gitignore eklendi; __pycache__, .DS_Store, .venv, data/thesis.db,
+    outputs/figures/*.html ve *.png artık repo'da değil (tekrar üretilebilir).
+[+] Eski prototip arşiv dosyaları silindi:
+      - bitirme_Demo.py (391 satır, v2 prototip)
+      - bitirme_grafikler.png
+      - bitirme_sonuclar.csv
+[+] EGARCH forecast hatası düzeltildi:
+      Hata: "Analytic forecasts not available for horizon > 1"
+      Düzeltme: garch_engine.forecast() -> EGARCH için method="simulation"
+                (simulations=1000) otomatik kullanılıyor.
+      Sonuç: 6 modelin hepsinde horizon=5 forecast artık çalışıyor.
+[+] main.py sonunda DatabaseManager iki kere açılıyordu; tek sefere indirildi.
+[+] preprocessor.py pandas 2.x uyumsuzluğu giderildi
+    (merged["uncertainty_score"].fillna(..., inplace=True) -> assign).
+[+] requirements.txt temizlendi: kullanılmayan paketler (langchain, shap,
+    lime, aiohttp) "opsiyonel" bölümüne alındı; scipy eklendi.
+[+] README.md eklendi: kurulum, CLI argümanları, klasör yapısı, test komutları.
+[+] PROJE_DURUMU.txt güncellendi (bu dosya).
+
+================================================================================
+1. KLASÖR YAPISI (GÜNCEL)
 ================================================================================
 
 cursorProject/
-├── config.yaml                         # Tüm proje parametreleri (52 satır)
-├── main.py                             # Tam pipeline orkestratör (276 satır)
-├── requirements.txt                    # Bağımlılıklar (13 paket)
-├── bitirme_Demo.py                     # Eski prototip v2 (391 satır, ARŞİV)
+├── README.md                           # ← YENİ
+├── .gitignore                          # ← YENİ
+├── config.yaml                         # Tüm proje parametreleri
+├── main.py                             # Tam pipeline orkestratör
+├── requirements.txt                    # Bağımlılıklar (temizlendi)
 ├── PROJE_DURUMU.txt                    # ← Bu dosya
 │
 ├── src/                                # ANA KOD
 │   ├── pipeline/                       # MODÜL 1: Veri Boru Hattı
 │   │   ├── database.py       (359 st)  DatabaseManager — SQLite CRUD
-│   │   ├── fetcher.py        (659 st)  Financial + TCMB + FED + GDELT + Mock
-│   │   └── preprocessor.py   (303 st)  DataPreprocessor — outlier, fill, feature eng.
+│   │   ├── fetcher.py        (659 st)  yfinance + TCMB + FED + GDELT + Mock
+│   │   └── preprocessor.py   (303 st)  DataPreprocessor — outlier, fill, FE
 │   │
 │   ├── nlp/                            # MODÜL 2: LLM Olay Çıkarımı
-│   │   ├── prompts.py        (91 st)   System/User prompt şablonları
+│   │   ├── prompts.py        ( 91 st)  System/User prompt şablonları
 │   │   ├── llm_client.py     (207 st)  OllamaClient — Llama 3 API wrapper
 │   │   ├── mock_nlp.py       (148 st)  MockNLP — Rule-based fallback
 │   │   └── event_extractor.py(259 st)  EventExtractor — Orkestratör
 │   │
 │   ├── models/                         # MODÜL 3: Finansal Modelleme
-│   │   ├── garch_engine.py   (366 st)  GARCHEngine — GARCH/EGARCH/TARCH + -X
-│   │   └── benchmark.py      (250 st)  ModelBenchmark — AIC/BIC/diagnostik
+│   │   ├── garch_engine.py   (371 st)  GARCHEngine (EGARCH fcast fix'li)
+│   │   └── benchmark.py      (465 st)  ModelBenchmark + OutOfSampleEvaluator
 │   │
 │   └── visualization/                  # MODÜL 4: XAI + Görselleştirme
-│       ├── plotly_dashboard.py(356 st) InteractiveDashboard — 6 panelli Plotly
-│       └── explainability.py (349 st)  VolatilityExplainer — Decomp, sensitivity
+│       ├── plotly_dashboard.py(356 st) InteractiveDashboard — 6 panelli
+│       └── explainability.py (350 st)  VolatilityExplainer — Decomp/Sens.
 │
-├── tests/                              # TESTLER (tümü geçti ✓)
-│   ├── test_module1.py       (101 st)  Veri pipeline testi
-│   ├── test_module2.py       (115 st)  NLP olay çıkarımı testi
-│   ├── test_module3.py       (104 st)  GARCH modelleme testi
-│   └── test_module4.py       (102 st)  Dashboard + XAI testi
+├── tests/                              # 4 entegrasyon testi (hepsi geçiyor)
+│   ├── test_module1.py       (101 st)
+│   ├── test_module2.py       (115 st)
+│   ├── test_module3.py       (104 st)
+│   └── test_module4.py       (102 st)
 │
-├── data/
-│   ├── thesis.db                       # SQLite DB (253 fin + 1578 haber + 1578 skor)
-│   ├── raw/                            # (boş — ileride ham veriler)
-│   └── processed/                      # (boş — ileride işlenmiş veriler)
+├── data/                               # (git'te yok — pipeline üretir)
+│   ├── thesis.db                       # SQLite DB
+│   ├── raw/
+│   └── processed/
 │
-├── outputs/figures/
-│   ├── dashboard.html                  # Plotly interaktif dashboard
-│   ├── decomposition_GARCH_X.png       # Variance decomposition
-│   ├── sensitivity_GARCH_X.png         # Sensitivity analizi
-│   └── event_timeline_GARCH_X.png      # Volatilite zıplamaları + olaylar
+├── outputs/figures/                    # (git'te yok — pipeline üretir)
+│   ├── dashboard.html
+│   ├── decomposition_GARCH_X.png
+│   ├── sensitivity_GARCH_X.png
+│   └── event_timeline_GARCH_X.png
 │
-├── notebooks/                          # (boş — ileride EDA, sonuçlar)
-├── models/                             # (boş — ileride model artifact'leri)
-└── outputs/reports/                    # (boş — ileride LaTeX/PDF)
+├── notebooks/                          # (boş — EDA için)
+├── models/                             # (boş — model artifact'leri için)
+└── outputs/reports/                    # (boş — LaTeX/PDF rapor için)
 
 ================================================================================
-2. MODÜL DETAYLARI — NE YAPILDI?
+2. MODÜL DETAYLARI — DURUM
 ================================================================================
 
 --- MODÜL 1: VERİ BORU HATTI (pipeline/) ---
-✅ DatabaseManager     : SQLite 3 tablo (financial_data, news_articles, nlp_scores)
-                         + 1 view (daily_merged). Upsert, transaction, context manager.
-✅ FinancialDataFetcher: yfinance → log return hesaplama → DB'ye kayıt.
-                         XU100.IS 1 yıllık veri (250 iş günü) çekildi.
-✅ MockNewsFetcher     : TCMB/FED/Yerel mock haber üretici. 525 haber üretildi.
-                         Gerçek scraper'lar yeterli haber getiremediyse fallback.
-✅ TCMBNewsFetcher     : TCMB basın duyuruları + PPK kararları web scraper.
-                         HTML parse, tarih filtre, detay sayfa içerik çekme.
-                         Retry + timeout + hata toleransı.
-✅ FEDNewsFetcher      : Fed RSS feed (press_monetary.xml, press_all.xml) +
-                         FOMC takvim sayfası statement scraper. XML parse,
-                         duplicate URL tespiti, detay sayfa içerik çekme.
-✅ GDELTNewsFetcher    : GDELT DOC 2.0 API ile Türkiye ekonomi haberleri.
-                         Ücretsiz JSON API, tarih aralığı chunking (30 gün),
-                         max_articles_per_day limiti, seen URL dedupe.
-                         Sorgu: Turkey/TCMB/Turkish lira + economy/interest rate/
-                         inflation/monetary policy/central bank/GDP/trade/fiscal.
-✅ DataPreprocessor    : IQR/Z-score outlier temizleme, ffill/bfill/interpolate,
-                         feature engineering (abs_return, return_sq, rolling_vol,
-                         rolling_mean, uncertainty_sma, high_uncertainty).
+[OK] DatabaseManager     : SQLite 3 tablo + 1 view, upsert, context manager
+[OK] FinancialDataFetcher: yfinance -> log return -> DB (XU100.IS 253 gün)
+[OK] MockNewsFetcher     : 21 keyword'lük sözlükle haber üretimi
+[OK] TCMBNewsFetcher     : Basın duyuruları + PPK kararları web scraper
+[OK] FEDNewsFetcher      : Fed RSS + FOMC takvim scraper
+[OK] GDELTNewsFetcher    : GDELT DOC 2.0 API ile Türkiye haberleri
+[OK] DataPreprocessor    : IQR/Z-score outlier, ffill/bfill/interp,
+                           feature engineering (6 ek kolon)
 
 --- MODÜL 2: LLM OLAY ÇIKARIMI (nlp/) ---
-✅ prompts.py          : 13 olay türü tanımlı system prompt. JSON schema zorlayan
-                         yapılandırılmış çıktı. Tek ve batch prompt builder.
-✅ OllamaClient        : Ollama REST API wrapper. Sağlık kontrolü, JSON mode,
-                         timeout, hata yönetimi, JSON extract fallback.
-✅ MockNLP             : 33 keyword'lük ağırlıklı sözlük. 11 olay türü tespiti.
-                         Ollama erişilemezken otomatik fallback.
-✅ EventExtractor      : Ana orkestratör. Ollama varsa LLM, yoksa MockNLP.
-                         Validate → DB kayıt → DataFrame dönüşüm → Özet istatistik.
-                         525 haber analiz edildi (ort. belirsizlik: 0.55).
+[OK] prompts.py          : 13 olay türü, JSON schema zorlayan system prompt
+[OK] OllamaClient        : Ollama REST wrapper + sağlık kontrolü + retry
+[OK] MockNLP             : 33 keyword'lük ağırlıklı sözlük, 11 olay türü
+[OK] EventExtractor      : LLM/Mock dispatcher, validate, DB kayıt, özet
 
 --- MODÜL 3: FİNANSAL MODELLEME (models/) ---
-✅ GARCHEngine         : 6 model tek seferde eğitilir:
-                         GARCH(1,1), EGARCH(1,1), TARCH(1,1,1)
-                         GARCH-X, EGARCH-X, TARCH-X (belirsizlik skoru exog var.)
-                         Forecast (5 gün ileriye), volatilite/residual DataFrame.
-✅ ModelBenchmark      : AIC/BIC sıralama, Vol korelasyonu, Vol MAE,
-                         Ljung-Box otokorelasyon testi, Jarque-Bera normallik testi,
-                         Exog değişken anlamlılık raporu (p-value).
+[OK] GARCHEngine         : 6 model (GARCH/EGARCH/TARCH + -X varyantları)
+                           Forecast (EGARCH simulation fix'li)
+[OK] ModelBenchmark      : AIC/BIC, Vol Corr/MAE, Ljung-Box, Jarque-Bera,
+                           exog anlamlılık (p-value)
+[OK] OutOfSampleEvaluator: Expanding window, 1-step-ahead, RMSE/MAE/QLIKE
 
-  Model Sonuçları (son pipeline çalıştırması — mock veri):
-  ┌──────────┬────────┬────────┬──────────┐
-  │ Model    │ AIC    │ BIC    │ Vol_Corr │
-  ├──────────┼────────┼────────┼──────────┤
-  │ TARCH-X  │ 889.13 │ 910.33 │ 0.59     │ ← AIC kazanan
-  │ TARCH    │ 889.15 │ 906.81 │ 0.60     │
-  │ EGARCH   │ 889.32 │ 906.98 │ 0.54     │
-  │ EGARCH-X │ 889.58 │ 910.78 │ 0.54     │
-  │ GARCH    │ 896.65 │ 910.79 │ 0.87     │ ← En yüksek korelasyon
-  │ GARCH-X  │ 897.59 │ 915.26 │ 0.86     │
-  └──────────┴────────┴────────┴──────────┘
+  Son çalıştırma (21.04.2026, mock veri, XU100.IS 253 gün):
+  ┌──────────┬────────┬────────┬──────────┬─────────┐
+  │ Model    │ AIC    │ BIC    │ Vol_Corr │ Vol_MAE │
+  ├──────────┼────────┼────────┼──────────┼─────────┤
+  │ TARCH-X  │ 888.66 │ 909.86 │ 0.60     │ 0.2346  │ <- AIC kazanan
+  │ TARCH    │ 889.15 │ 906.81 │ 0.60     │ 0.2359  │
+  │ EGARCH-X │ 889.17 │ 910.37 │ 0.55     │ 0.2453  │
+  │ EGARCH   │ 889.32 │ 906.98 │ 0.54     │ 0.2502  │
+  │ GARCH    │ 896.65 │ 910.79 │ 0.87     │ 0.2057  │ <- Corr kazanan
+  │ GARCH-X  │ 897.19 │ 914.85 │ 0.86     │ 0.1862  │
+  └──────────┴────────┴────────┴──────────┴─────────┘
+
+  OOS (test=51 gün, 20%):
+  ┌──────────┬────────┬────────┬────────┬──────────┐
+  │ Model    │ RMSE   │ MAE    │ QLIKE  │ HitRate  │
+  ├──────────┼────────┼────────┼────────┼──────────┤
+  │ EGARCH   │ 4.157  │ 2.681  │ 2.072  │ 0.490    │ <- OOS kazanan
+  │ GARCH    │ 4.177  │ 2.708  │ 2.089  │ 0.490    │
+  │ TARCH    │ 4.182  │ 2.799  │ 2.092  │ 0.471    │
+  │ GARCH-X  │ 4.194  │ 2.761  │ 2.096  │ 0.490    │
+  │ TARCH-X  │ 4.204  │ 2.835  │ 2.097  │ 0.471    │
+  └──────────┴────────┴────────┴────────┴──────────┘
+  Not: EGARCH-X NaN çıkıyor (bilinen sorun — madde 4.c).
 
 --- MODÜL 4: GÖRSELLEŞTİRME ve XAI (visualization/) ---
-✅ InteractiveDashboard: 6 panelli Plotly dashboard.
-                         Fiyat, getiri bar, belirsizlik scatter + SMA,
-                         6 model volatilite karşılaştırma, scatter korelasyon,
-                         benchmark tablosu. HTML ve PNG export.
-✅ VolatilityExplainer : Variance decomposition (ω, α·ε², β·σ², γ·U ayrıştırma),
-                         Sensitivity analizi (U=0→1 arası volatilite değişimi),
-                         Event-volatility timeline (top N zıplama + olay etiket).
-                         3 ayrı grafik üretildi.
-
---- MODÜL 5: ANA PİPELINE (main.py) ---
-✅ main.py             : 7 adımlık tam pipeline orkestratörü.
-                         ADIM 1: DB bağlantısı
-                         ADIM 2: Finansal veri (yfinance) + Haber çekme
-                                 (TCMB → FED → GDELT → Mock fallback)
-                         ADIM 3: NLP olay çıkarımı (Ollama/MockNLP)
-                         ADIM 4: Veri önişleme + birleştirme
-                         ADIM 5: GARCH modelleme (6 model)
-                         ADIM 6: Volatilite tahmini (N gün ileri)
-                         ADIM 7: Dashboard + XAI grafikleri
-                         CLI argümanları: --skip-fetch, --skip-nlp, --skip-viz,
-                         --force-mock, --mock-only, --ticker, --forecast,
-                         --no-dashboard
-                         Uçtan uca ~3.6 sn (mock modda).
+[OK] InteractiveDashboard: 6 panelli Plotly (fiyat, getiri, belirsizlik,
+                           vol karşılaştırma, scatter, benchmark tablosu)
+[OK] VolatilityExplainer : Variance decomp (w+α·ε²+β·σ²+γ·U),
+                           Sensitivity (U=0->1), Event timeline (top N)
 
 ================================================================================
-3. KURULAN ARAÇLAR
+3. VERİTABANI DURUMU
 ================================================================================
 
-✅ Ollama               : brew install ollama → servis başlatıldı
-✅ Llama 3 (8B)         : ollama pull llama3 → 4.7 GB model indirildi
-✅ plotly                : pip3 install plotly
-✅ pyyaml                : pip3 install pyyaml
-✅ requests              : pip3 install requests
-✅ beautifulsoup4        : pip3 install beautifulsoup4
-   (yfinance, pandas, numpy, arch, matplotlib zaten kuruluydu)
+  financial_data : 253 kayıt (XU100.IS, 16.04.2025 -> 14.04.2026)
+  news_articles  : 1578 kayıt (TCMB + FED + GDELT + mock karışık)
+  nlp_scores     : 4209 kayıt (birden fazla kez pipeline çalıştırıldığı için
+                   yinelenen skorlar var — bkz. madde 4.d)
 
 ================================================================================
-4. VERİTABANI DURUMU (data/thesis.db)
+4. BİLİNEN SORUNLAR / İYİLEŞTİRMELER
 ================================================================================
 
-  financial_data : 253 kayıt (XU100.IS, 16.04.2025 → 14.04.2026)
-  news_articles  : 1578 kayıt (TCMB + FED + Yerel mock)
-  nlp_scores     : 1578 kayıt (MockNLP ile üretildi)
+(a) Llama 3 henüz üretim kalitesinde kullanılmadı.
+    Şu anki pipeline MockNLP ile çalışıyor. Ollama açıkken LLM yolu da
+    test edildi ama tüm 1578 haber LLM ile skorlanmadı.
+
+(b) Out-of-sample sonuçlarında -X modelleri baseline'ı geçemedi.
+    Mock haber kullanıldığı için belirsizlik skoru yapay. Gerçek Llama 3
+    skorlarıyla tekrar denenmesi gerek.
+
+(c) EGARCH-X OOS değerlendirmesinde NaN dönüyor.
+    EGARCH + exog + simulation forecast'ın birleşiminde bir uyum sorunu var.
+    evaluate_all() bu modeli atlıyor. Çözüm: benchmark.py::_rolling_forecast
+    içinde EGARCH için de exog dict formatı simulation ile denenmeli.
+
+(d) nlp_scores tablosunda duplicate kayıt birikiyor.
+    insert_scores() UNIQUE constraint kullanmıyor. Her pipeline run'da
+    yinelenen skorlar ekleniyor (1578 haber -> 4209 skor).
+    Çözüm: UNIQUE(news_id, model_used) + ON CONFLICT REPLACE.
+
+(e) LLM kalite değerlendirmesi yok.
+    MockNLP ile LLM çıktıları karşılaştırılmıyor (altın standart yok).
+    Çözüm: 50-100 haberlik el-etiketli altın set, accuracy/F1/corr raporu.
+
+(f) notebooks/ klasörü boş.
+    EDA ve final sonuç defterleri yazılmadı.
+
+(g) SHAP/LIME entegrasyonu yok.
+    GARCH doğrudan desteklenmiyor; proxy model (Random Forest / XGBoost)
+    ile çözülebilir ama henüz uygulanmadı.
+
+(h) LaTeX tez raporu yok.
+    outputs/reports/ klasörü boş.
 
 ================================================================================
-5. HENÜZ YAPILMADI — SIRADAKI ADIMLAR
+5. ÖNCELİKLİ YAPILACAKLAR (SIRALI)
 ================================================================================
 
-❌ Llama 3 ile gerçek belirsizlik skoru üretimi (şu an MockNLP aktif)
-❌ Jupyter Notebook'lar (EDA, model karşılaştırma, final sonuçlar)
-❌ SHAP/LIME entegrasyonu (GARCH doğrudan desteklemediği için proxy model gerekli)
-❌ Out-of-sample forecasting (train/test split)
-❌ LaTeX tez raporu
-❌ README.md
+[P1] Llama 3 ile 1578 haberin gerçek LLM skorlamasını yap ve DB'ye yaz.
+     - Tahmini süre: M4 Pro üzerinde ~30-60 dk (batch + concurrency).
+     - nlp_scores'ta model_used="llama3" olacak.
+     - Sonra benchmark ile karşılaştır: LLM vs Mock belirsizlik skoru.
+
+[P2] LLM altın standart seti oluştur:
+     - 50 haberi manuel etiketle (event_type + uncertainty 0-1).
+     - MockNLP ve Llama 3 çıktılarını altın sete karşı test et.
+     - Accuracy / F1 / Pearson korelasyonu raporla.
+
+[P3] Pipeline'ı gerçek Llama 3 skorları ile uçtan uca tekrar çalıştır.
+     - 6 GARCH modelinin AIC/BIC/OOS sonuçlarını yeni skorlarla üret.
+     - "Mock" vs "LLM" karşılaştırma tablosu (hipotez: -X modelleri
+       gerçek LLM skoruyla baseline'ı geçer).
+
+[P4] EGARCH-X OOS NaN sorununu çöz:
+     - benchmark.py::_rolling_forecast içinde EGARCH + exog simulation kolu.
+     - Gerekirse exog kolonunu normalize (z-score) et.
+
+[P5] nlp_scores tablosuna UNIQUE(news_id, model_used) ekle,
+     INSERT -> INSERT OR REPLACE yap. Mevcut tabloyu yeniden kur
+     ("nlp_scores" için migration SQL veya DB'yi sıfırla).
+
+[P6] Jupyter Notebook'lar:
+     - notebooks/01_eda.ipynb            -> veri keşfi + zaman serisi görseli
+     - notebooks/02_nlp_comparison.ipynb -> Mock vs LLM skor dağılımı
+     - notebooks/03_garch_results.ipynb  -> 6 model + OOS + XAI yorumu
+     - notebooks/04_final_report.ipynb   -> teze eklenecek figürler
+
+[P7] SHAP proxy modeli:
+     - y = GARCH-X conditional volatility
+     - X = [log_return, abs_return, rolling_vol, avg_uncertainty, ...]
+     - xgboost.XGBRegressor fit -> shap.TreeExplainer
+     - Feature importance bar chart + summary plot.
+
+[P8] Çoklu ticker analizi:
+     - XU100.IS, ^GSPC, USDTRY=X için aynı pipeline'ı koş.
+     - Ticker'lara göre gamma (exog katsayısı) karşılaştırması.
+
+[P9] LaTeX tez raporu:
+     - outputs/reports/thesis.tex
+     - Bölümler: Giriş, Literatür, Yöntem, Veri, Sonuçlar, Tartışma, Sonuç.
+     - Tüm figürleri outputs/figures/'dan referansla.
+
+[P10] Docker imajı (opsiyonel, tekrar üretilebilirlik için):
+      Dockerfile + docker-compose.yml (Ollama servisi dahil).
 
 ================================================================================
-6. NASIL ÇALIŞTIRILIR?
+6. NASIL ÇALIŞTIRILIR
 ================================================================================
 
-  # 1. Tam pipeline (gerçek TCMB + FED + GDELT scraper):
-  python3 main.py
+  # Kurulum
+  python3 -m venv .venv
+  source .venv/bin/activate
+  pip install -r requirements.txt
 
-  # 2. Sadece mock haberle hızlı çalıştır:
-  python3 main.py --mock-only --force-mock
+  # (Opsiyonel) Ollama + Llama 3
+  brew install ollama
+  ollama pull llama3
 
-  # 3. Farklı ticker ile:
-  python3 main.py --ticker "^GSPC" --mock-only --force-mock
+  # Hızlı test (mevcut DB + mock NLP)
+  python main.py --skip-fetch --force-mock
 
-  # 4. Mevcut DB verisiyle (yeniden çekmeden):
-  python3 main.py --skip-fetch --force-mock
+  # Tam pipeline (gerçek scraper + gerçek LLM)
+  python main.py
 
-  # 5. Tüm modülleri ayrı ayrı test et:
-  python3 tests/test_module1.py    # Veri çek → DB'ye kaydet
-  python3 tests/test_module2.py    # NLP analiz → skorları DB'ye kaydet
-  python3 tests/test_module3.py    # 6 GARCH modeli eğit → benchmark
-  python3 tests/test_module4.py    # Dashboard + XAI grafikleri üret
+  # Sadece mock haber (scraper'ı atla)
+  python main.py --mock-only --force-mock
 
-  # 6. Ollama + Llama 3 test:
-  ollama list                      # llama3:latest görünmeli
-  curl http://localhost:11434/api/tags   # Sunucu çalışıyor mu?
+  # Tek modül test
+  python tests/test_module1.py   # Veri pipeline
+  python tests/test_module2.py   # NLP
+  python tests/test_module3.py   # GARCH
+  python tests/test_module4.py   # Dashboard + XAI
 
-  # 7. Dashboard'u aç:
+  # Dashboard aç
   open outputs/figures/dashboard.html
+
+  # Git
+  git add -A
+  git commit -m "..."
+  git push
+
+================================================================================
+7. REFERANS — KOMUT SATIRI BAYRAKLARI
+================================================================================
+
+  --ticker SYMBOL      yfinance ticker (default: XU100.IS)
+  --skip-fetch         Veri çekmeyi atla
+  --skip-nlp           NLP'yi atla
+  --skip-viz           Görselleştirmeyi atla
+  --skip-oos           Out-of-sample'ı atla
+  --force-mock         MockNLP kullan (Ollama açık olsa da)
+  --mock-only          Gerçek scraper atla, sadece mock haber
+  --forecast N         Forecast ufku (default: 5)
+  --test-ratio F       OOS test oranı (default: 0.20)
 
 ================================================================================

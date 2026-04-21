@@ -283,15 +283,14 @@ def run():
         step_header(7, "GÖRSELLEŞTİRME [ATLANDI]")
 
     # ── ÖZET ───────────────────────────────────────────────────────────
+    final_counts = db.table_counts()
     db.close()
     elapsed = time.time() - t0
 
     banner("PİPELINE TAMAMLANDI")
-    counts = DatabaseManager(db_path).table_counts()
-    print(f"  DB kayıtları : {counts}")
+    print(f"  DB kayıtları : {final_counts}")
     print(f"  En iyi model : {best}")
     print(f"  Toplam süre  : {elapsed:.1f} saniye")
-    DatabaseManager(db_path).close()
 
 
 if __name__ == "__main__":

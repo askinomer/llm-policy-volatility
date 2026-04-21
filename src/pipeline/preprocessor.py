@@ -99,7 +99,7 @@ class DataPreprocessor:
             merged = financial_df.copy()
 
         if "uncertainty_score" in merged.columns:
-            merged["uncertainty_score"].fillna(0.5, inplace=True)
+            merged["uncertainty_score"] = merged["uncertainty_score"].fillna(0.5)
 
         logger.info("Timestamp eşleme tamamlandı: %d satır.", len(merged))
         return merged

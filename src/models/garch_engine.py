@@ -272,6 +272,10 @@ class GARCHEngine:
                     }
                     kwargs["x"] = x_dict
 
+            if model_result.vol_model == "EGARCH" and horizon > 1:
+                kwargs.setdefault("method", "simulation")
+                kwargs.setdefault("simulations", 1000)
+
             fcast = res.forecast(**kwargs)
             return pd.DataFrame({
                 "variance": fcast.variance.iloc[-1].values,
