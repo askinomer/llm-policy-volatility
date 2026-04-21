@@ -19,6 +19,8 @@ env/
 
 # Veri ve model artefaktları (üretilen dosyalar, tekrar üretilebilir)
 data/thesis.db
+data/thesis.db-shm
+data/thesis.db-wal
 data/raw/*
 data/processed/*
 !data/raw/.gitkeep

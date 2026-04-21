@@ -1,8 +1,50 @@
 ================================================================================
   BİTİRME PROJESİ — DURUM RAPORU
   "LLM Tabanlı Politika Olay Çıkarımı ve Finansal Volatilite Modellemesi"
-  Son güncelleme: 21 Nisan 2026
+  Son güncelleme: 21 Nisan 2026 (2. oturum — LLM skorlama)
 ================================================================================
+
+--------------------------------------------------------------------------------
+0. BU OTURUMDA (21 NİSAN 2026 — AKŞAM) YAPILANLAR
+--------------------------------------------------------------------------------
+
+[+] scripts/run_llm_scoring.py yazıldı:
+      - Resume özelliği (DB'de zaten skorlu haberleri atla).
+      - Progress bar (tqdm) + ortalama süre + ETA.
+      - Fallback bypass: LLM başarısızsa MockNLP'ye düşmez, skip eder.
+      - Batch commit (her N haberde DB'ye yaz).
+      - --limit / --sample / --reset / --model / --timeout / --max-tokens.
+      - list/dict JSON toleransı (bazı modeller array döndürüyor).
+
+[+] 3 LLM modeli hız/doğruluk karşılaştırması (10 haberlik testler):
+      Model         sn/haber   Başarı   1578 için ETA
+      llama3:8b     33         %100     ~14.5 saat
+      phi3:mini     5.4        %60      ~2.4 saat
+      qwen2.5:3b    4.2        %100     ~2.2 saat   ← SEÇİLDİ
+
+[+] qwen2.5:3b pilot (200 haber rastgele): 14 dk, failed=0.
+[+] qwen2.5:3b full run background'da başlatıldı (PID 73880, nohup).
+      - Log: /tmp/qwen_full.log
+      - Bitince nlp_scores'ta ~1578 qwen2.5:3b kaydı olmalı.
+
+[+] scripts/compare_nlp_scores.py yazıldı: iki modelin aynı haberlerde
+    verdiği skorları karşılaştırır (Pearson, Spearman, MAE, confusion
+    matrix, dağılım).
+
+[!] PİLOT BULGULAR (mock vs qwen, n=210 ortak haber):
+      Uncertainty  -> Pearson 0.61, Spearman 0.59, MAE 0.18
+                      (Mock ort 0.54, Qwen ort 0.49)
+      Impact dir.  -> Anlaşma SADECE %40.5 (85/210)
+                      Mock -1 ağırlıklı (106/48/56)
+                      Qwen dengeli      (66/81/63)
+      Event type   -> Anlaşma %51
+                      Mock top: faiz_artisi, doviz_mudahalesi, diger
+                      Qwen top: mali_politika, enflasyon, doviz_mudahalesi
+      Yorum: MockNLP keyword tabanlı olduğu için "faiz" geçen her haberi
+      'faiz_artisi' olarak etiketliyor; Qwen bağlamı kavrıyor. Bu fark
+      GARCH-X gamma katsayısını ciddi etkileyecek. >> Altın set zorunlu.
+
+
 
 TOPLAM KOD: ~5.000 satır Python (15 modül + 4 test + 1 config + 1 main)
 GITHUB    : https://github.com/askinomer/llm-policy-volatility
