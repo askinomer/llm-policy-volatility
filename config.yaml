@@ -1,0 +1,52 @@
+project:
+  name: "Politik Belirsizlik ve Finansal Volatilite"
+  version: "1.0.0"
+
+database:
+  path: "data/thesis.db"
+
+financial:
+  tickers:
+    - "XU100.IS"    # BIST 100
+    - "^GSPC"       # S&P 500
+  default_ticker: "XU100.IS"
+  period: "1y"
+  interval: "1d"
+
+news:
+  sources:
+    - "tcmb"
+    - "fed"
+    - "gdelt"
+  gdelt_base_url: "https://api.gdeltproject.org/api/v2/doc/doc"
+  max_articles_per_day: 50
+  min_articles_fallback: 100
+
+nlp:
+  model: "llama3"
+  ollama_base_url: "http://localhost:11434"
+  fallback: "mock"
+  temperature: 0.1
+  max_tokens: 512
+
+garch:
+  p: 1
+  q: 1
+  models:
+    - "GARCH"
+    - "EGARCH"
+    - "TARCH"
+  distribution: "normal"
+
+preprocessing:
+  outlier_method: "iqr"
+  outlier_threshold: 3.0
+  fill_strategy: "ffill"
+  rolling_window: 20
+
+output:
+  figures_dir: "outputs/figures"
+  reports_dir: "outputs/reports"
+  plot_dpi: 150
+
+seed: 42

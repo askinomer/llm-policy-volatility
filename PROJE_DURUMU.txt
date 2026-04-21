@@ -1,0 +1,204 @@
+================================================================================
+  BİTİRME PROJESİ — DURUM RAPORU
+  "LLM Tabanlı Politika Olay Çıkarımı ve Finansal Volatilite Modellemesi"
+  Tarih: 15 Nisan 2026
+================================================================================
+
+TOPLAM KOD: ~4.800 satır Python (15 modül + 4 test + 1 config + 1 main + 1 demo)
+
+================================================================================
+1. KLASÖR YAPISI
+================================================================================
+
+cursorProject/
+├── config.yaml                         # Tüm proje parametreleri (52 satır)
+├── main.py                             # Tam pipeline orkestratör (276 satır)
+├── requirements.txt                    # Bağımlılıklar (13 paket)
+├── bitirme_Demo.py                     # Eski prototip v2 (391 satır, ARŞİV)
+├── PROJE_DURUMU.txt                    # ← Bu dosya
+│
+├── src/                                # ANA KOD
+│   ├── pipeline/                       # MODÜL 1: Veri Boru Hattı
+│   │   ├── database.py       (359 st)  DatabaseManager — SQLite CRUD
+│   │   ├── fetcher.py        (659 st)  Financial + TCMB + FED + GDELT + Mock
+│   │   └── preprocessor.py   (303 st)  DataPreprocessor — outlier, fill, feature eng.
+│   │
+│   ├── nlp/                            # MODÜL 2: LLM Olay Çıkarımı
+│   │   ├── prompts.py        (91 st)   System/User prompt şablonları
+│   │   ├── llm_client.py     (207 st)  OllamaClient — Llama 3 API wrapper
+│   │   ├── mock_nlp.py       (148 st)  MockNLP — Rule-based fallback
+│   │   └── event_extractor.py(259 st)  EventExtractor — Orkestratör
+│   │
+│   ├── models/                         # MODÜL 3: Finansal Modelleme
+│   │   ├── garch_engine.py   (366 st)  GARCHEngine — GARCH/EGARCH/TARCH + -X
+│   │   └── benchmark.py      (250 st)  ModelBenchmark — AIC/BIC/diagnostik
+│   │
+│   └── visualization/                  # MODÜL 4: XAI + Görselleştirme
+│       ├── plotly_dashboard.py(356 st) InteractiveDashboard — 6 panelli Plotly
+│       └── explainability.py (349 st)  VolatilityExplainer — Decomp, sensitivity
+│
+├── tests/                              # TESTLER (tümü geçti ✓)
+│   ├── test_module1.py       (101 st)  Veri pipeline testi
+│   ├── test_module2.py       (115 st)  NLP olay çıkarımı testi
+│   ├── test_module3.py       (104 st)  GARCH modelleme testi
+│   └── test_module4.py       (102 st)  Dashboard + XAI testi
+│
+├── data/
+│   ├── thesis.db                       # SQLite DB (253 fin + 1578 haber + 1578 skor)
+│   ├── raw/                            # (boş — ileride ham veriler)
+│   └── processed/                      # (boş — ileride işlenmiş veriler)
+│
+├── outputs/figures/
+│   ├── dashboard.html                  # Plotly interaktif dashboard
+│   ├── decomposition_GARCH_X.png       # Variance decomposition
+│   ├── sensitivity_GARCH_X.png         # Sensitivity analizi
+│   └── event_timeline_GARCH_X.png      # Volatilite zıplamaları + olaylar
+│
+├── notebooks/                          # (boş — ileride EDA, sonuçlar)
+├── models/                             # (boş — ileride model artifact'leri)
+└── outputs/reports/                    # (boş — ileride LaTeX/PDF)
+
+================================================================================
+2. MODÜL DETAYLARI — NE YAPILDI?
+================================================================================
+
+--- MODÜL 1: VERİ BORU HATTI (pipeline/) ---
+✅ DatabaseManager     : SQLite 3 tablo (financial_data, news_articles, nlp_scores)
+                         + 1 view (daily_merged). Upsert, transaction, context manager.
+✅ FinancialDataFetcher: yfinance → log return hesaplama → DB'ye kayıt.
+                         XU100.IS 1 yıllık veri (250 iş günü) çekildi.
+✅ MockNewsFetcher     : TCMB/FED/Yerel mock haber üretici. 525 haber üretildi.
+                         Gerçek scraper'lar yeterli haber getiremediyse fallback.
+✅ TCMBNewsFetcher     : TCMB basın duyuruları + PPK kararları web scraper.
+                         HTML parse, tarih filtre, detay sayfa içerik çekme.
+                         Retry + timeout + hata toleransı.
+✅ FEDNewsFetcher      : Fed RSS feed (press_monetary.xml, press_all.xml) +
+                         FOMC takvim sayfası statement scraper. XML parse,
+                         duplicate URL tespiti, detay sayfa içerik çekme.
+✅ GDELTNewsFetcher    : GDELT DOC 2.0 API ile Türkiye ekonomi haberleri.
+                         Ücretsiz JSON API, tarih aralığı chunking (30 gün),
+                         max_articles_per_day limiti, seen URL dedupe.
+                         Sorgu: Turkey/TCMB/Turkish lira + economy/interest rate/
+                         inflation/monetary policy/central bank/GDP/trade/fiscal.
+✅ DataPreprocessor    : IQR/Z-score outlier temizleme, ffill/bfill/interpolate,
+                         feature engineering (abs_return, return_sq, rolling_vol,
+                         rolling_mean, uncertainty_sma, high_uncertainty).
+
+--- MODÜL 2: LLM OLAY ÇIKARIMI (nlp/) ---
+✅ prompts.py          : 13 olay türü tanımlı system prompt. JSON schema zorlayan
+                         yapılandırılmış çıktı. Tek ve batch prompt builder.
+✅ OllamaClient        : Ollama REST API wrapper. Sağlık kontrolü, JSON mode,
+                         timeout, hata yönetimi, JSON extract fallback.
+✅ MockNLP             : 33 keyword'lük ağırlıklı sözlük. 11 olay türü tespiti.
+                         Ollama erişilemezken otomatik fallback.
+✅ EventExtractor      : Ana orkestratör. Ollama varsa LLM, yoksa MockNLP.
+                         Validate → DB kayıt → DataFrame dönüşüm → Özet istatistik.
+                         525 haber analiz edildi (ort. belirsizlik: 0.55).
+
+--- MODÜL 3: FİNANSAL MODELLEME (models/) ---
+✅ GARCHEngine         : 6 model tek seferde eğitilir:
+                         GARCH(1,1), EGARCH(1,1), TARCH(1,1,1)
+                         GARCH-X, EGARCH-X, TARCH-X (belirsizlik skoru exog var.)
+                         Forecast (5 gün ileriye), volatilite/residual DataFrame.
+✅ ModelBenchmark      : AIC/BIC sıralama, Vol korelasyonu, Vol MAE,
+                         Ljung-Box otokorelasyon testi, Jarque-Bera normallik testi,
+                         Exog değişken anlamlılık raporu (p-value).
+
+  Model Sonuçları (son pipeline çalıştırması — mock veri):
+  ┌──────────┬────────┬────────┬──────────┐
+  │ Model    │ AIC    │ BIC    │ Vol_Corr │
+  ├──────────┼────────┼────────┼──────────┤
+  │ TARCH-X  │ 889.13 │ 910.33 │ 0.59     │ ← AIC kazanan
+  │ TARCH    │ 889.15 │ 906.81 │ 0.60     │
+  │ EGARCH   │ 889.32 │ 906.98 │ 0.54     │
+  │ EGARCH-X │ 889.58 │ 910.78 │ 0.54     │
+  │ GARCH    │ 896.65 │ 910.79 │ 0.87     │ ← En yüksek korelasyon
+  │ GARCH-X  │ 897.59 │ 915.26 │ 0.86     │
+  └──────────┴────────┴────────┴──────────┘
+
+--- MODÜL 4: GÖRSELLEŞTİRME ve XAI (visualization/) ---
+✅ InteractiveDashboard: 6 panelli Plotly dashboard.
+                         Fiyat, getiri bar, belirsizlik scatter + SMA,
+                         6 model volatilite karşılaştırma, scatter korelasyon,
+                         benchmark tablosu. HTML ve PNG export.
+✅ VolatilityExplainer : Variance decomposition (ω, α·ε², β·σ², γ·U ayrıştırma),
+                         Sensitivity analizi (U=0→1 arası volatilite değişimi),
+                         Event-volatility timeline (top N zıplama + olay etiket).
+                         3 ayrı grafik üretildi.
+
+--- MODÜL 5: ANA PİPELINE (main.py) ---
+✅ main.py             : 7 adımlık tam pipeline orkestratörü.
+                         ADIM 1: DB bağlantısı
+                         ADIM 2: Finansal veri (yfinance) + Haber çekme
+                                 (TCMB → FED → GDELT → Mock fallback)
+                         ADIM 3: NLP olay çıkarımı (Ollama/MockNLP)
+                         ADIM 4: Veri önişleme + birleştirme
+                         ADIM 5: GARCH modelleme (6 model)
+                         ADIM 6: Volatilite tahmini (N gün ileri)
+                         ADIM 7: Dashboard + XAI grafikleri
+                         CLI argümanları: --skip-fetch, --skip-nlp, --skip-viz,
+                         --force-mock, --mock-only, --ticker, --forecast,
+                         --no-dashboard
+                         Uçtan uca ~3.6 sn (mock modda).
+
+================================================================================
+3. KURULAN ARAÇLAR
+================================================================================
+
+✅ Ollama               : brew install ollama → servis başlatıldı
+✅ Llama 3 (8B)         : ollama pull llama3 → 4.7 GB model indirildi
+✅ plotly                : pip3 install plotly
+✅ pyyaml                : pip3 install pyyaml
+✅ requests              : pip3 install requests
+✅ beautifulsoup4        : pip3 install beautifulsoup4
+   (yfinance, pandas, numpy, arch, matplotlib zaten kuruluydu)
+
+================================================================================
+4. VERİTABANI DURUMU (data/thesis.db)
+================================================================================
+
+  financial_data : 253 kayıt (XU100.IS, 16.04.2025 → 14.04.2026)
+  news_articles  : 1578 kayıt (TCMB + FED + Yerel mock)
+  nlp_scores     : 1578 kayıt (MockNLP ile üretildi)
+
+================================================================================
+5. HENÜZ YAPILMADI — SIRADAKI ADIMLAR
+================================================================================
+
+❌ Llama 3 ile gerçek belirsizlik skoru üretimi (şu an MockNLP aktif)
+❌ Jupyter Notebook'lar (EDA, model karşılaştırma, final sonuçlar)
+❌ SHAP/LIME entegrasyonu (GARCH doğrudan desteklemediği için proxy model gerekli)
+❌ Out-of-sample forecasting (train/test split)
+❌ LaTeX tez raporu
+❌ README.md
+
+================================================================================
+6. NASIL ÇALIŞTIRILIR?
+================================================================================
+
+  # 1. Tam pipeline (gerçek TCMB + FED + GDELT scraper):
+  python3 main.py
+
+  # 2. Sadece mock haberle hızlı çalıştır:
+  python3 main.py --mock-only --force-mock
+
+  # 3. Farklı ticker ile:
+  python3 main.py --ticker "^GSPC" --mock-only --force-mock
+
+  # 4. Mevcut DB verisiyle (yeniden çekmeden):
+  python3 main.py --skip-fetch --force-mock
+
+  # 5. Tüm modülleri ayrı ayrı test et:
+  python3 tests/test_module1.py    # Veri çek → DB'ye kaydet
+  python3 tests/test_module2.py    # NLP analiz → skorları DB'ye kaydet
+  python3 tests/test_module3.py    # 6 GARCH modeli eğit → benchmark
+  python3 tests/test_module4.py    # Dashboard + XAI grafikleri üret
+
+  # 6. Ollama + Llama 3 test:
+  ollama list                      # llama3:latest görünmeli
+  curl http://localhost:11434/api/tags   # Sunucu çalışıyor mu?
+
+  # 7. Dashboard'u aç:
+  open outputs/figures/dashboard.html
+
+================================================================================
