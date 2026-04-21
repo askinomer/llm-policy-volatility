@@ -403,11 +403,9 @@ class OutOfSampleEvaluator:
                     }
 
                 if vol == "EGARCH":
-                    fcast = res.forecast(
-                        horizon=1, method="simulation", simulations=1000,
-                    )
-                else:
-                    fcast = res.forecast(**fc_kwargs)
+                    fc_kwargs["method"] = "simulation"
+                    fc_kwargs["simulations"] = 1000
+                fcast = res.forecast(**fc_kwargs)
 
                 pred_var = float(fcast.variance.iloc[-1, 0])
                 forecast_var.append(pred_var)

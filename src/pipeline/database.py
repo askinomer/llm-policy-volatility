@@ -144,15 +144,18 @@ class DatabaseManager:
                     impact_direction    INTEGER CHECK(
                                             impact_direction IN (-1, 0, 1)
                                         ),
-                    model_used          TEXT    DEFAULT 'mock',
+                    model_used          TEXT    NOT NULL DEFAULT 'mock',
                     raw_llm_response    TEXT,
                     created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE(news_id, model_used),
                     FOREIGN KEY (news_id) REFERENCES news_articles(id)
                         ON DELETE CASCADE
                 );
 
                 CREATE INDEX IF NOT EXISTS idx_nlp_date
                     ON nlp_scores(date);
+                CREATE INDEX IF NOT EXISTS idx_nlp_news_model
+                    ON nlp_scores(news_id, model_used);
 
                 CREATE VIEW IF NOT EXISTS daily_merged AS
                 SELECT
@@ -253,6 +256,12 @@ class DatabaseManager:
             VALUES
                 (:news_id, :date, :event_type, :uncertainty_score,
                  :impact_direction, :model_used, :raw_llm_response)
+            ON CONFLICT(news_id, model_used) DO UPDATE SET
+                date              = excluded.date,
+                event_type        = excluded.event_type,
+                uncertainty_score = excluded.uncertainty_score,
+                impact_direction  = excluded.impact_direction,
+                raw_llm_response  = excluded.raw_llm_response
         """
         with self._transaction() as cur:
             cur.executemany(sql, records)
