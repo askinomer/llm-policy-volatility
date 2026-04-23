@@ -323,22 +323,50 @@ class DatabaseManager:
         ticker: str,
         start: Optional[str] = None,
         end: Optional[str] = None,
+        nlp_model: Optional[str] = None,
     ) -> pd.DataFrame:
         """
-        daily_merged view'ından birleştirilmiş veriyi döner.
-        GARCH modeline doğrudan verilebilecek formatta.
+        Birleştirilmiş günlük veri (finansal + NLP skor agregasyonu).
+
+        Parameters
+        ----------
+        nlp_model : str | None
+            Sadece verilen model_used için nlp_scores filtrelenir
+            (örn. "qwen2.5:3b", "llama3", "mock"). None ise tüm modellerin
+            ortalaması alınır (eski davranış — duplicate riski).
         """
-        query = "SELECT * FROM daily_merged WHERE ticker = ?"
-        params: list = [ticker]
+        if nlp_model is None:
+            query = "SELECT * FROM daily_merged WHERE ticker = ?"
+            params: list = [ticker]
+        else:
+            query = """
+                SELECT
+                    f.date,
+                    f.ticker,
+                    f.close,
+                    f.log_return,
+                    COALESCE(AVG(n.uncertainty_score), 0.5) AS avg_uncertainty,
+                    COUNT(n.id) AS news_count,
+                    GROUP_CONCAT(DISTINCT n.event_type) AS events
+                FROM financial_data f
+                LEFT JOIN nlp_scores n
+                    ON f.date = n.date AND n.model_used = ?
+                WHERE f.ticker = ?
+            """
+            params = [nlp_model, ticker]
 
         if start:
-            query += " AND date >= ?"
+            query += " AND f.date >= ?" if nlp_model else " AND date >= ?"
             params.append(start)
         if end:
-            query += " AND date <= ?"
+            query += " AND f.date <= ?" if nlp_model else " AND date <= ?"
             params.append(end)
 
-        query += " ORDER BY date"
+        if nlp_model:
+            query += " GROUP BY f.date, f.ticker ORDER BY f.date"
+        else:
+            query += " ORDER BY date"
+
         df = pd.read_sql_query(query, self.connection, params=params, parse_dates=["date"])
         if not df.empty:
             df.set_index("date", inplace=True)

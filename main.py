@@ -43,6 +43,8 @@ def parse_args():
     p.add_argument("--mock-only", action="store_true", help="Gerçek scraper yerine sadece mock haber kullan")
     p.add_argument("--test-ratio", type=float, default=0.20, help="OOS test seti oranı (varsayılan: 0.20)")
     p.add_argument("--skip-oos", action="store_true", help="Out-of-sample değerlendirmeyi atla")
+    p.add_argument("--nlp-model", type=str, default=None,
+                   help="GARCH-X için kullanılacak NLP modeli (ör. qwen2.5:3b, llama3, mock)")
     return p.parse_args()
 
 
@@ -176,7 +178,9 @@ def run():
     step_header(4, "VERİ ÖNİŞLEME + BİRLEŞTİRME")
     from src.pipeline.preprocessor import DataPreprocessor
 
-    merged = db.get_merged_data(ticker)
+    merged = db.get_merged_data(ticker, nlp_model=args.nlp_model)
+    if args.nlp_model:
+        print(f"  NLP modeli  : {args.nlp_model} (sadece bu skorlar kullanılıyor)")
     if merged.empty:
         logger.error("Merged veri boş! Pipeline durduruluyor.")
         db.close()

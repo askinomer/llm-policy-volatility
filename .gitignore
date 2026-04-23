@@ -33,6 +33,8 @@ outputs/figures/*.html
 outputs/figures/*.png
 outputs/reports/*.pdf
 models/*.pkl
+# Ancak CSV raporlar (karşılaştırma tabloları vs.) versiyonlansın
+!outputs/reports/*.csv
 
 # Logs
 *.log
